@@ -1,3 +1,6 @@
+import json
+
+from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -8,6 +11,7 @@ from store.serializers import BooksSerializer
 
 class BooksApiTestCase(APITestCase):
     def setUp(self):
+        self.user=User.objects.create(username='test_username')
         self.book_1 = Book.objects.create(name='Test Book 1', price=500,
                                           author_name='Author1')
         self.book_2 = Book.objects.create(name='Test Book 2', price=1000,
@@ -32,7 +36,6 @@ class BooksApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, serializer_data)
 
-
     def test_get_search(self):
         url = reverse('book-list')
         response = self.client.get(url, data={'search': 'Author1'})
@@ -56,3 +59,41 @@ class BooksApiTestCase(APITestCase):
             [self.book_1, self.book_2, self.book_3], many=True).data
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, serializer_data)
+
+    def test_create(self):
+        self.assertEqual(3, Book.objects.all().count())
+        url = reverse('book-list')
+        data = {
+            'name': 'Test Book 4',
+            'price': 2500,
+            'author_name': 'Author4'
+        }
+        json_data = json.dumps(data)
+        self.client.force_login(self.user)
+        response = self.client.post(url, data=json_data,
+                                    content_type='application/json')
+        self.assertEqual(status.HTTP_201_CREATED, response.status_code)
+        self.assertEqual(4, Book.objects.all().count())
+
+    def test_update(self):
+
+        url = reverse('book-detail', args=(self.book_3.id,))
+        data = {
+            'name': self.book_3.name,
+            'price': 100,
+            'author_name': self.book_3.author_name
+        }
+        json_data = json.dumps(data)
+        self.client.force_login(self.user)
+        response = self.client.put(url, data=json_data,
+                                    content_type='application/json')
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        self.book_3.refresh_from_db()
+        self.assertEquals(100, self.book_3.price)
+
+    def test_delete(self):
+        url = reverse('book-detail', args=(self.book_3.id,))
+        self.client.force_login(self.user)
+        response = self.client.delete(url, content_type='application/json')
+        self.assertEqual(status.HTTP_204_NO_CONTENT, response.status_code)
+        self.assertEquals(2, Book.objects.all().count())
