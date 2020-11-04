@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.exceptions import ErrorDetail
 from rest_framework.test import APITestCase
 
-from store.models import Book
+from store.models import Book, UserBookRelation
 from store.serializers import BooksSerializer
 
 
@@ -108,7 +108,7 @@ class BooksApiTestCase(APITestCase):
         self.assertEqual(status.HTTP_403_FORBIDDEN, response.status_code)
         self.assertEqual({'detail': ErrorDetail(
             string='You do not have permission to perform this action.',
-            code='permission_denied'),}, response.data)
+            code='permission_denied'), }, response.data)
 
     def test_update_not_owner_but_staff(self):
         user2 = User.objects.create(username='test_username2', is_staff=True)
@@ -132,3 +132,70 @@ class BooksApiTestCase(APITestCase):
         response = self.client.delete(url, content_type='application/json')
         self.assertEqual(status.HTTP_204_NO_CONTENT, response.status_code)
         self.assertEquals(2, Book.objects.all().count())
+
+
+class BooksRelationApiTestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create(username='test_username1')
+        self.user2 = User.objects.create(username='test_username2')
+
+        self.book_1 = Book.objects.create(name='Test Book 1', price=500,
+                                          author_name='Author1')
+        self.book_2 = Book.objects.create(name='Test Book 2', price=1000,
+                                          author_name='Author2')
+
+    def test_like(self):
+        data = {
+            'like': True,
+        }
+        json_data = json.dumps(data)
+        url = reverse('userbookrelation-detail', args=(self.book_1.id,))
+        self.client.force_login(self.user)
+        response = self.client.patch(url, data=json_data,
+                                     content_type='application/json')
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        relation = UserBookRelation.objects.get(user=self.user,
+                                                book=self.book_1)
+        self.assertTrue(relation.like)
+
+    def test_in_bookmarks(self):
+        data = {
+            'in_bookmarks': True,
+        }
+        json_data = json.dumps(data)
+        url = reverse('userbookrelation-detail', args=(self.book_1.id,))
+        self.client.force_login(self.user)
+        response = self.client.patch(url, data=json_data,
+                                     content_type='application/json')
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        relation = UserBookRelation.objects.get(user=self.user,
+                                                book=self.book_1)
+        self.assertTrue(relation.in_bookmarks)
+
+    def test_rate(self):
+        data = {
+            'rate': 5,
+        }
+        json_data = json.dumps(data)
+        url = reverse('userbookrelation-detail', args=(self.book_1.id,))
+        self.client.force_login(self.user)
+        response = self.client.patch(url, data=json_data,
+                                     content_type='application/json')
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
+        relation = UserBookRelation.objects.get(user=self.user,
+                                                book=self.book_1)
+        self.assertEqual(5, relation.rate)
+
+    def test_rate_wrong(self):
+        data = {
+            'rate': 100,
+        }
+        json_data = json.dumps(data)
+        url = reverse('userbookrelation-detail', args=(self.book_1.id,))
+        self.client.force_login(self.user)
+        response = self.client.patch(url, data=json_data,
+                                     content_type='application/json')
+        self.assertEqual(status.HTTP_400_BAD_REQUEST, response.status_code)
+        self.assertEqual({'rate': [
+            ErrorDetail(string=f'"{data["rate"]}" is not a valid choice.',
+                        code='invalid_choice')]}, response.data)
