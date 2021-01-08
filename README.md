@@ -1,3 +1,4 @@
+# Tutorial project. Learn DRF and tests
 # library
 Library project. Django, Python, Django-rest-framework
 
